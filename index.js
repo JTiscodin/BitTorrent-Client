@@ -4,7 +4,7 @@ import bencode from "bencode";
 
 import { Buffer } from "buffer";
 
-import { getPeers } from "./tracker";
+import { getPeers } from "./src/tracker";
 
 const torrent = bencode.decode(fs.readFileSync("gtav.torrent"));
 
