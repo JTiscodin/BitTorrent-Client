@@ -6,7 +6,9 @@ import { Buffer } from "buffer";
 
 import { getPeers } from "./src/tracker";
 
-const torrent = bencode.decode(fs.readFileSync("gtav.torrent"));
+import torrentParser from "./src/torrent-parser"
+
+const torrent = torrentParser.open("./gtav.torrent")
 
 getPeers(torrent, peers => {
     console.log("list of peers", peers)
