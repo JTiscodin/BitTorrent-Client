@@ -109,8 +109,8 @@ module.exports.parse = msg => {
     if(id === 6 || id === 7 || id === 8){
         const rest = payload.slice(8);
         payload ={
-            index = payload.readUInt32BE(0);
-            begin = payload.readUInt32BE(4);
+            index : payload.readUInt32BE(0),
+            begin : payload.readUInt32BE(4)
         };
         payload[id === 7 ? 'block' : 'length'] = rest;  
     }
