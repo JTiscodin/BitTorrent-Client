@@ -102,3 +102,21 @@ module.exports.buildPort = payload => {
     buf.writeUInt16BE(payload, 5); //listen-port
     return buf;
 };
+
+module.exports.parse = msg => {
+    const id = msg.length > 4 ? msg.readUInt8(4) : null;
+    const payload = msg.length > 5 ? msg.slice(5) : null;
+    if(id === 6 || id === 7 || id === 8){
+        const rest = payload.slice(8);
+        payload ={
+            index = payload.readUInt32BE(0);
+            begin = payload.readUInt32BE(4);
+        };
+        payload[id === 7 ? 'block' : 'length'] = rest;  
+    }
+    return {
+        size: msg.readUInt32BE(0),
+        id:id,
+        payload:payload
+    }
+};
