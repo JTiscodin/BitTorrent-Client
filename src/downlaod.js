@@ -4,26 +4,27 @@ const tracker = require('./tracker');
 const { on } = require('events');
 const message = require('./message');
 const Pieces = require('./Pieces');
+const Queue = require('./Queue');
+
 
 module.exports = torrent => {
     tracker.getPeers(torrent, peers => {
-        const pieces = new Pieces(torrent.info.pieces.length / 20);
-        peers.forEach(peer => download(peer, torrent));
+        const pieces = new Pieces(torrent);
+        peers.forEach(peer => download(peer, torrent, pieces));
     });
 }
 
-function downlaod(peer) {
+function downlaod(peer,torrent,pieces){ {
     const socket = new net.Socket();
     socket.on('error', console.log);
     socket.connect(peer.port, peer.ip, () => {
         // socket.write()...
         socket.write(message.buildHandshake(torrent));
     });
-    const queue = {choked: true, queue: []};
-    onWholeMsg(socket, data =>{
-        //handle response
-        onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue));
-    });
+    const queue = new Queue(torrent);
+    onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue));
+  
+}
 }
 
 function onWholeMsg(socket, callback) {
@@ -132,13 +133,13 @@ function pieceHandler(payload, socket, requested, queue){
 
 function requestPiece(socket,pieces, queue){
     if(queue.chocked) return null;
-    while(queue.length){
-        const pieceIndex = queue.shift();
-        if(pieces.needed(pieceIndex)){
-            socket.write(message.buildRequest(pieceIndex));
-            pieces.addRequested(pieceIndex);
+    while(queue.length()){
+        const pieceBlock = queue.deque();
+        if(pieces.needed(pieceBlock)){
+            socket.write(message.buildRequest(pieceBlock));
+            pieces.addRequested(pieceBlock);
             break;
         }
     }
-    
 }
+    
