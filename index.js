@@ -14,8 +14,8 @@ const download = require('./src/downlaod');
 const torrentParser = require('./src/torrent-parser');
 const torrent = torrentParser.open(process.argv[2]);
 
-getPeers(torrent, peers => {
-    console.log("list of peers", peers)
-})
+// getPeers(torrent, peers => {
+//     console.log("list of peers", peers)
+// })
 
-download(torrent);
+download(torrent, torrent.info.name);

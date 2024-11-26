@@ -7,10 +7,11 @@ const Pieces = require('./Pieces');
 const Queue = require('./Queue');
 
 
-module.exports = torrent => {
+module.exports = (torrent,path) => {
     tracker.getPeers(torrent, peers => {
         const pieces = new Pieces(torrent);
-        peers.forEach(peer => download(peer, torrent, pieces));
+        const file = fs.openSync(path,'w');
+        peers.forEach(peer => download(peer, torrent, pieces,file));
     });
 }
 
@@ -71,7 +72,6 @@ function unchokeHandler(socket, piece,queue){
     requestPiece(socket, pieces, queue);
 }
 
-function haveHandler(payload){}
 
 function bitfieldHandler(socket, pieces, queue, payload) {
     const queueEmpty = queue.length === 0;
@@ -84,7 +84,6 @@ function bitfieldHandler(socket, pieces, queue, payload) {
     if (queueEmpty) requestPiece(socket, pieces, queue);
 }
 
-function pieceHandler(payload){}
 
 
 //4.9.1
@@ -122,11 +121,21 @@ function haveHandler(socket,pieces,queue, payload){
     if(queueEmpty) requestPiece(socket,pieces, queue);
 }
 
-function pieceHandler(payload, socket, requested, queue){
-    //...
-    queue.shift();
-    requestPiece(socket, requested, queue);
-}
+function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
+    console.log(pieceResp);
+    pieces.addReceived(pieceResp);
+  
+    const offset = pieceResp.index * torrent.info['piece length'] + pieceResp.begin;
+    fs.write(file, pieceResp.block, 0, pieceResp.block.length, offset, () => {});
+  
+    if (pieces.isDone()) {
+      console.log('DONE!');
+      socket.end();
+      try { fs.closeSync(file); } catch(e) {}
+    } else {
+      requestPiece(socket,pieces, queue);
+    }
+  }
 
 // function requestPeice(socket, requested, queue){
 //     if(requested[queue[0]]){
