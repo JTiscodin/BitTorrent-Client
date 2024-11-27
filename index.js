@@ -1,16 +1,19 @@
-import fs from "fs";
+// import fs from "fs";
 
-import bencode from "bencode";
+// import bencode from "bencode";
 
-import { Buffer } from "buffer";
+// import { Buffer } from "buffer";
 
-import { getPeers } from "./src/tracker";
+// import { getPeers } from "./src/tracker";
 
 // import torrentParser from "./src/torrent-parser"
 
 // const torrent = torrentParser.open("./gtav.torrent")
 // added for download - Shubh
-const download = require('./src/downlaod');
+
+'use strict';
+
+const download = require('./src/download');
 const torrentParser = require('./src/torrent-parser');
 const torrent = torrentParser.open(process.argv[2]);
 

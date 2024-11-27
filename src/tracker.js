@@ -1,58 +1,55 @@
-import dgram from "dgram";
+'use strict';
 
-import { Buffer } from "buffer";
+const dgram = require('dgram');
+const Buffer = require('buffer').Buffer;
+const urlParse = require('url').parse;
+const crypto = require('crypto');
+const torrentParser = require('./torrent-parser');
+const util = require('./utils');
 
-import { parse, URL } from "url";
+module.exports.getPeers = (torrent, callback) => {
+  const socket = dgram.createSocket('udp4');
+  const url = torrent.announce.toString('utf8');
 
-import crypto from "crypto";
-
-import torrentParser from "./torrent-parser";
-
-import { genId } from "./utils";
-
-const torrent = bencode.decode(fs.readFileSync("gtav.torrent"));
-
-const url = parse(torrent.announce.toString("utf8"));
-
-export const getPeers = (torrent, callback) => {
-  const socket = dgram.createSocket("udp4");
-
-  const url = torrent.announce.toString("utf8");
-
+  // 1. send connect request
   udpSend(socket, buildConnReq(), url);
 
-  socket.on("message", (response) => {
-    if (respType(response) === "connect") {
+  socket.on('message', response => {
+    if (respType(response) === 'connect') {
+      // 2. receive and parse connect response
       const connResp = parseConnResp(response);
-
-      const announceReq = buildAnnounceReq(connResp.connectionId);
+      // 3. send announce request
+      const announceReq = buildAnnounceReq(connResp.connectionId, torrent);
       udpSend(socket, announceReq, url);
-    } else if (respType(response) == "announce") {
+    } else if (respType(response) === 'announce') {
+      // 4. parse announce response
       const announceResp = parseAnnounceResp(response);
-      callback(announceResp.peers); //returning peers for the files announced.
+      // 5. pass peers to callback
+      callback(announceResp.peers);
     }
   });
 };
 
-function udpSend(socket, message, rawUrl, callback = () => {}) {
-  const url = parse(rawUrl);
-  socket.send(message, 0, message.length, url.port, url.host, callback);
+function udpSend(socket, message, rawUrl, callback=()=>{}) {
+  const url = urlParse(rawUrl);
+  socket.send(message, 0, message.length, url.port, url.hostname, callback);
 }
 
 function respType(resp) {
   const action = resp.readUInt32BE(0);
-  if (action === 0) return "connect";
-  if (action === 1) return "announce";
+  if (action === 0) return 'connect';
+  if (action === 1) return 'announce';
 }
 
 function buildConnReq() {
-  const buf = Buffer.alloc(16);
+  const buf = Buffer.allocUnsafe(16);
 
-  buf.writeBigUint64BE(0x417, 0);
-  buf.writeBigUInt64BE(0x27101980, 4);
-
-  buf.writeUint32BE(0, 8);
-
+  // connection id
+  buf.writeUInt32BE(0x417, 0);
+  buf.writeUInt32BE(0x27101980, 4);
+  // action
+  buf.writeUInt32BE(0, 8);
+  // transaction id
   crypto.randomBytes(4).copy(buf, 12);
 
   return buf;
@@ -62,11 +59,11 @@ function parseConnResp(resp) {
   return {
     action: resp.readUInt32BE(0),
     transactionId: resp.readUInt32BE(4),
-    connection_id: resp.slice(8),
-  };
+    connectionId: resp.slice(8)
+  }
 }
 
-function buildAnnounceReq(connId, torrent, port = 6881) {
+function buildAnnounceReq(connId, torrent, port=6881) {
   const buf = Buffer.allocUnsafe(98);
 
   // connection id
@@ -88,7 +85,7 @@ function buildAnnounceReq(connId, torrent, port = 6881) {
   // event
   buf.writeUInt32BE(0, 80);
   // ip address
-  buf.writeUInt32BE(0, 80);
+  buf.writeUInt32BE(0, 84);
   // key
   crypto.randomBytes(4).copy(buf, 88);
   // num want
@@ -113,11 +110,11 @@ function parseAnnounceResp(resp) {
     transactionId: resp.readUInt32BE(4),
     leechers: resp.readUInt32BE(8),
     seeders: resp.readUInt32BE(12),
-    peers: group(resp.slice(20), 6).map((address) => {
+    peers: group(resp.slice(20), 6).map(address => {
       return {
-        ip: address.slice(0, 4).join("."),
-        port: address.readUInt32BE(4),
-      };
-    }),
-  };
+        ip: address.slice(0, 4).join('.'),
+        port: address.readUInt16BE(4)
+      }
+    })
+  }
 }

@@ -1,12 +1,14 @@
-import crypto from "crypto";
+'use strict';
 
-const id = null;
+const crypto = require('crypto');
 
-export const genId = () => {
+let id = null;
+
+module.exports.genId = () => {
   if (!id) {
     id = crypto.randomBytes(20);
-    //Name of the client "JT" version "00001"
-    Buffer.from("-JT0001").copy(id,0);
+    // Name of the client "JT" version "00001"
+    Buffer.from("-JT0001").copy(id, 0);
   }
   return id;
 };
