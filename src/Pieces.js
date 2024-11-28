@@ -1,6 +1,7 @@
-const tp = require('./torrent-parser');
+// const tp = require('./torrent-parser');
+import tp from './torrent-parser.js';
 
-module.exports = class {
+export default class {
   constructor(torrent) {
     function buildPiecesArray() {
       const nPieces = torrent.info.pieces.length / 20;

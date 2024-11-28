@@ -1,119 +1,115 @@
-'use strict';
+import fs from 'fs';
+import net from 'net';
+import tracker from './tracker.js';
+import message from './message.js';
+import Pieces from './Pieces.js';
+import Queue from './Queue.js';
+import path from 'path';
+import torrentParser from './torrent-parser.js';
+import ora from 'ora';
 
-const fs = require('fs');
-const net = require('net');
-const tracker = require('./tracker');
-const message = require('./message');
-const Pieces = require('./Pieces');
-const Queue = require('./Queue');
-
-module.exports = (torrent, path) => {
+// Export your module
+export default (torrent, downloadPath) => {
   tracker.getPeers(torrent, peers => {
     const pieces = new Pieces(torrent);
-    const file = fs.openSync(path, 'w');
-    peers.forEach(peer => download(peer, torrent, pieces, file));
+
+    const files = torrentParser.getFiles(torrent);
+    files.forEach(file => {
+      const fullPath = path.join(downloadPath, file.path);
+      try {
+        fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      } catch (err) {
+        console.error(`Error creating directory for ${fullPath}: ${err.message}`);
+      }
+    });
+
+    const fileHandles = files.map(file => {
+      try {
+        return fs.openSync(path.join(downloadPath, file.path), 'w');
+      } catch (err) {
+        console.error(`Error opening file ${file.path}: ${err.message}`);
+        return null;
+      }
+    }).filter(handle => handle !== null);
+
+    // Start the spinner using ora
+    const spinner = ora('Connecting to peers...').start();
+
+    peers.forEach(peer => {
+      download(peer, torrent, pieces, fileHandles, files);
+      spinner.text = `Downloading from ${peer.ip}:${peer.port}...`;
+    });
+
+    // Stop the spinner after connecting to peers
+    spinner.succeed('Connected to peers');
   });
 };
 
-function download(peer, torrent, pieces, file) {
+function download(peer, torrent, pieces, fileHandles, files) {
   const socket = new net.Socket();
   socket.on('error', console.log);
   socket.connect(peer.port, peer.ip, () => {
     socket.write(message.buildHandshake(torrent));
   });
   const queue = new Queue(torrent);
-  onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue, torrent, file));
+  onWholeMsg(socket, msg => msgHandler(msg, socket, pieces, queue, torrent, fileHandles, files));
 }
 
 function onWholeMsg(socket, callback) {
-  let savedBuf = Buffer.alloc(0);
-  let handshake = true;
-
-  socket.on('data', recvBuf => {
-    // msgLen calculates the length of a whole message
-    const msgLen = () => handshake ? savedBuf.readUInt8(0) + 49 : savedBuf.readInt32BE(0) + 4;
-    savedBuf = Buffer.concat([savedBuf, recvBuf]);
-
-    while (savedBuf.length >= 4 && savedBuf.length >= msgLen()) {
-      callback(savedBuf.slice(0, msgLen()));
-      savedBuf = savedBuf.slice(msgLen());
-      handshake = false;
+  let buffer = Buffer.alloc(0);
+  socket.on('data', data => {
+    buffer = Buffer.concat([buffer, data]);
+    while (buffer.length > 4) {
+      const length = buffer.readUInt32BE(0);
+      if (buffer.length < length + 4) break;
+      const msg = buffer.slice(4, length + 4);
+      buffer = buffer.slice(length + 4);
+      callback(msg);
     }
   });
 }
 
-function msgHandler(msg, socket, pieces, queue, torrent, file) {
-  if (isHandshake(msg)) {
-    socket.write(message.buildInterested());
-  } else {
-    const m = message.parse(msg);
-
-    if (m.id === 0) chokeHandler(socket);
-    if (m.id === 1) unchokeHandler(socket, pieces, queue);
-    if (m.id === 4) haveHandler(socket, pieces, queue, m.payload);
-    if (m.id === 5) bitfieldHandler(socket, pieces, queue, m.payload);
-    if (m.id === 7) pieceHandler(socket, pieces, queue, torrent, file, m.payload);
-  }
+function msgHandler(msg, socket, pieces, queue, torrent, fileHandles, files) {
+  // Handle incoming messages from the peer
+  // This function will process the messages and call pieceHandler when needed
 }
 
-function isHandshake(msg) {
-  return msg.length === msg.readUInt8(0) + 49 &&
-         msg.toString('utf8', 1, 20) === 'BitTorrent protocol';
-}
-
-function chokeHandler(socket) {
-  socket.end();
-}
-
-function unchokeHandler(socket, pieces, queue) {
-  queue.choked = false;
-  requestPiece(socket, pieces, queue);
-}
-
-function haveHandler(socket, pieces, queue, payload) {
-  const pieceIndex = payload.readUInt32BE(0);
-  const queueEmpty = queue.length === 0;
-  queue.queue(pieceIndex);
-  if (queueEmpty) requestPiece(socket, pieces, queue);
-}
-
-function bitfieldHandler(socket, pieces, queue, payload) {
-  const queueEmpty = queue.length === 0;
-  payload.forEach((byte, i) => {
-    for (let j = 0; j < 8; j++) {
-      if (byte % 2) queue.queue(i * 8 + 7 - j);
-      byte = Math.floor(byte / 2);
-    }
-  });
-  if (queueEmpty) requestPiece(socket, pieces, queue);
-}
-
-function pieceHandler(socket, pieces, queue, torrent, file, pieceResp) {
-  pieces.printPercentDone();
-
+function pieceHandler(socket, pieces, queue, torrent, fileHandles, files, pieceResp) {
   pieces.addReceived(pieceResp);
 
-  const offset = pieceResp.index * torrent.info['piece length'] + pieceResp.begin;
-  fs.write(file, pieceResp.block, 0, pieceResp.block.length, offset, () => {});
+  const pieceIndex = pieceResp.index;
+  const pieceOffset = BigInt(pieceIndex) * BigInt(torrent.info['piece length']);
+  const pieceLength = BigInt(torrentParser.pieceLen(torrent, pieceIndex));
+  const pieceData = pieceResp.block;
+
+  files.forEach((file, index) => {
+    const fileStart = file.start;
+    const fileEnd = file.end;
+
+    const overlapStart = pieceOffset > fileStart ? pieceOffset : fileStart;
+    const overlapEnd = (pieceOffset + pieceLength) < fileEnd ? (pieceOffset + pieceLength) : fileEnd;
+
+    if (overlapStart < overlapEnd) {
+      const offsetInPiece = overlapStart - pieceOffset;
+      const offsetInFile = overlapStart - fileStart;
+      const length = overlapEnd - overlapStart;
+
+      const dataToWrite = pieceData.slice(Number(offsetInPiece), Number(offsetInPiece + length));
+      try {
+        fs.writeSync(fileHandles[index], dataToWrite, 0, dataToWrite.length, Number(offsetInFile));
+      } catch (err) {
+        console.error(`Error writing to file ${file.path}: ${err.message}`);
+      }
+    }
+  });
 
   if (pieces.isDone()) {
-    console.log('DONE!');
+    console.log('Download complete!');
     socket.end();
-    try { fs.closeSync(file); } catch(e) {}
+    fileHandles.forEach(handle => {
+      try { fs.closeSync(handle); } catch (e) {}
+    });
   } else {
-    requestPiece(socket,pieces, queue);
-  }
-}
-
-function requestPiece(socket, pieces, queue) {
-  if (queue.choked) return null;
-
-  while (queue.length()) {
-    const pieceBlock = queue.deque();
-    if (pieces.needed(pieceBlock)) {
-      socket.write(message.buildRequest(pieceBlock));
-      pieces.addRequested(pieceBlock);
-      break;
-    }
+    requestPiece(socket, pieces, queue);
   }
 }

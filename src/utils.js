@@ -1,10 +1,11 @@
 'use strict';
 
-const crypto = require('crypto');
+// const crypto = require('crypto');
+import crypto from 'crypto';
 
 let id = null;
 
-module.exports.genId = () => {
+const genId = () => {
   if (!id) {
     id = crypto.randomBytes(20);
     // Name of the client "JT" version "00001"
@@ -12,3 +13,5 @@ module.exports.genId = () => {
   }
   return id;
 };
+
+export default {genId};

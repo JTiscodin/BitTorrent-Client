@@ -1,6 +1,8 @@
-const tp = require('./torrent-parser');
+// const tp = require('./torrent-parser');
+import tp from './torrent-parser.js';
 
-module.exports = class {
+
+export default class {
   constructor(torrent) {
     this._torrent = torrent;
     this._queue = [];

@@ -1,10 +1,13 @@
 'use strict';
 
-const Buffer = require('buffer').Buffer;
-const torrentParser = require('./torrent-parser');
-const util = require('./utils');
+import { Buffer } from 'buffer';
+// const Buffer = require('buffer').Buffer;
+import torrentParser from './torrent-parser.js';
+// const torrentParser = require('./torrent-parser');
+import util from './utils.js';
+// const util = require('./utils');
 
-module.exports.buildHandshake = torrent => {
+export const buildHandshake = torrent => {
   const buf = Buffer.alloc(68);
   // pstrlen
   buf.writeUInt8(19, 0);
@@ -20,9 +23,9 @@ module.exports.buildHandshake = torrent => {
   return buf;
 };
 
-module.exports.buildKeepAlive = () => Buffer.alloc(4);
+export const buildKeepAlive = () => Buffer.alloc(4);
 
-module.exports.buildChoke = () => {
+export const buildChoke = () => {
   const buf = Buffer.alloc(5);
   // length
   buf.writeUInt32BE(1, 0);
@@ -31,7 +34,7 @@ module.exports.buildChoke = () => {
   return buf;
 };
 
-module.exports.buildUnchoke = () => {
+export const buildUnchoke = () => {
   const buf = Buffer.alloc(5);
   // length
   buf.writeUInt32BE(1, 0);
@@ -40,7 +43,7 @@ module.exports.buildUnchoke = () => {
   return buf;
 };
 
-module.exports.buildInterested = () => {
+export const buildInterested = () => {
   const buf = Buffer.alloc(5);
   // length
   buf.writeUInt32BE(1, 0);
@@ -49,7 +52,7 @@ module.exports.buildInterested = () => {
   return buf;
 };
 
-module.exports.buildUninterested = () => {
+export const buildUninterested = () => {
   const buf = Buffer.alloc(5);
   // length
   buf.writeUInt32BE(1, 0);
@@ -58,7 +61,7 @@ module.exports.buildUninterested = () => {
   return buf;
 };
 
-module.exports.buildHave = payload => {
+export const buildHave = payload => {
   const buf = Buffer.alloc(9);
   // length
   buf.writeUInt32BE(5, 0);
@@ -69,7 +72,7 @@ module.exports.buildHave = payload => {
   return buf;
 };
 
-module.exports.buildBitfield = bitfield => {
+export const buildBitfield = bitfield => {
   const buf = Buffer.alloc(bitfield.length + 1 + 4);
   // length
   buf.writeUInt32BE(payload.length + 1, 0);
@@ -80,7 +83,7 @@ module.exports.buildBitfield = bitfield => {
   return buf;
 };
 
-module.exports.buildRequest = payload => {
+export const buildRequest = payload => {
   const buf = Buffer.alloc(17);
   // length
   buf.writeUInt32BE(13, 0);
@@ -95,7 +98,7 @@ module.exports.buildRequest = payload => {
   return buf;
 };
 
-module.exports.buildPiece = payload => {
+export const buildPiece = payload => {
   const buf = Buffer.alloc(payload.block.length + 13);
   // length
   buf.writeUInt32BE(payload.block.length + 9, 0);
@@ -110,7 +113,7 @@ module.exports.buildPiece = payload => {
   return buf;
 };
 
-module.exports.buildCancel = payload => {
+export const buildCancel = payload => {
   const buf = Buffer.alloc(17);
   // length
   buf.writeUInt32BE(13, 0);
@@ -125,7 +128,7 @@ module.exports.buildCancel = payload => {
   return buf;
 };
 
-module.exports.buildPort = payload => {
+export const buildPort = payload => {
   const buf = Buffer.alloc(7);
   // length
   buf.writeUInt32BE(3, 0);
@@ -136,7 +139,7 @@ module.exports.buildPort = payload => {
   return buf;
 };
 
-module.exports.parse = msg => {
+export const parse = msg => {
   const id = msg.length > 4 ? msg.readInt8(4) : null;
   let payload = msg.length > 5 ? msg.slice(5) : null;
   if (id === 6 || id === 7 || id === 8) {
@@ -154,3 +157,5 @@ module.exports.parse = msg => {
     payload : payload
   }
 };
+
+export default {parse, buildHandshake, buildKeepAlive, buildChoke, buildUnchoke, buildInterested, buildUninterested, buildHave, buildBitfield, buildRequest, buildPiece, buildCancel, buildPort};
